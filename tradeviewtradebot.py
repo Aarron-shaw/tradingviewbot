@@ -15,21 +15,17 @@ import urllib.parse
 
 from binance.client import Client
 
-#First version of my trading view trading bot. 
 
-
-
-#Use this for your tradingview alert 
 # Currency {{ticker}} Action {{strategy.order.action}} Price {{strategy.order.price}}
 
-user_key =  "binanceapikey"
-secret_key = "binanceapisecret"
+user_key =  "binance key"
+secret_key = "binance secret"
 
 
 client = Client(user_key, secret_key)
 
-user = "yourgmail"
-pwd = "gmailapppassword"
+user = "gmail@account"
+pwd = "pass"
 
 trade_list = []
 
@@ -39,28 +35,29 @@ def gen_perc(num,lev):
     return (num / 100) / lev 
 
 def telegram_msg(text):
-    #you need to edit this 
-    # telegram_con = "https://api.telegram.org/telegrambotapikey/sendMessage?chat_id=-groupid&parse_mode=HTML&text=" + urllib.parse.quote_plus(text)
-    # #print(telegram_con)
-    # result = requests.get(telegram_con)
-    # #print(result)
-    return False
+    
+    telegram_con = "https://api.telegram.org/[botinfo_here]/?parse_mode=HTML&text=" + urllib.parse.quote_plus(text)
+    #print(telegram_con)
+    result = requests.get(telegram_con)
+    #print(result)
 
 def perc_to_set(num,lev):
     return num / (100 / lev)
 
 
-sl = 30 #Stop loss % you want 
-trail_stop = 29 #Trailing stop loss % you want 
-roe_check = 1 # This will trigger the trailing stop loss
-tp = 100 # take profit %
-lev = 20 # Leverage you want to use
+sl = 30
+trail_stop = 30
+roe_check = 0
+tp = 250
+lev = 20
+
 percs = gen_perc(sl,lev)
 trail_percs = gen_perc(trail_stop,lev)
 perct = gen_perc(tp,lev)
 total_profit = 0
 total_roe = 0
-allowed_trades = 10 # account balance / allowed_trades 
+
+allowed_trades = 50
 log_details = []
 
 f = open("trade.log", "a")
@@ -120,12 +117,12 @@ def roe_quick(price,current,qty, side):
 def test_gen_sl_tp(price,action):
     price = float(price)
     if action == "BUY":
-        stop_loss = price - (price * percs)
+        stop_loss = price - (price * trail_percs)
         take_profit = price + (price * perct)
         stop_side = "SELL"
         take_side = "BUY"
     if action == "SELL":
-        stop_loss = price + (price * percs)
+        stop_loss = price + (price * trail_percs)
         take_profit = price - (price * perct)
         stop_side = "SELL"
         take_side = "BUY"
@@ -135,12 +132,12 @@ def test_gen_sl_tp(price,action):
 def test_gen_trail(price,action):
     price = float(price)
     if action == "BUY":
-        stop_loss = price - (price * trail_percs)
+        stop_loss = price - (price * percs)
         take_profit = price + (price * perct)
         stop_side = "SELL"
         take_side = "BUY"
     if action == "SELL":
-        stop_loss = price + (price * trail_percs)
+        stop_loss = price + (price * percs)
         take_profit = price - (price * perct)
         stop_side = "SELL"
         take_side = "BUY"
@@ -156,8 +153,8 @@ def check_filled(my_list):
     for i in my_list:
         
         clear = False
-        i['SL'] = order_info(i['SL'])
-        i['TP'] = order_info(i['TP'])
+        # i['SL'] = order_info(i['SL'])
+        # i['TP'] = order_info(i['TP'])
         start_price = float(i['Parent']['avgPrice'])
         side = i['Parent']['side']
         qty = i['Parent']['origQty']
@@ -218,13 +215,13 @@ def clear_trades(my_list):
     global total_roe
     global trade_list
     global log_details
-    trail_stop_perc = gen_perc(trail_stop,lev)
+    
     for i in my_list:
-        try:
-            i['SL'] = order_info(i['SL'])
-            i['TP'] = order_info(i['TP'])
-        except:
-            continue
+        # try:
+            # i['SL'] = order_info(i['SL'])
+            # i['TP'] = order_info(i['TP'])
+        # except:
+            # continue
         
         btc_current = client.futures_symbol_ticker(symbol=i['Parent']['symbol'])
         btc_current_price = float(btc_current['price'])
@@ -244,14 +241,14 @@ def clear_trades(my_list):
                 #print("Trying to generate new SL/TP")
                 
                 new_stop, new_take = test_gen_sl_tp(btc_current_price,side)
-                #print(new_take,take)
+                #write_to_log("SL = {} NSL = {}".format(stop,new_stop),'check_filled')
                 if new_stop > stop:
-        
+                
             
                     try:
-                        i['SL'], i['TP'] = update_sltp(i['Parent'],i['SL'], i['TP'],trail_stop_perc)
+                        i['SL'], i['TP'] = update_sltp(i['Parent'],i['SL'], i['TP'],trail_percs)
                         #print("Sucessfully updated SL/TP for {}".format(i['Parent']['symbol']))
-                        #write_to_log("Sucessfully updated SL/TP for {}".format(i['Parent']['symbol']),'clear_trades()')
+                        write_to_log("Sucessfully updated SL/TP for {}".format(i['Parent']['symbol']),'clear_trades()')
                         # print("""
 # ROE from SL {}%
 # Current ROE {}%""".format(round(roe_quick(start_price,float(i['SL']['stopPrice']),qty,side),2),take_roe))
@@ -275,22 +272,23 @@ def clear_trades(my_list):
                 
                 new_stop, new_take = test_gen_sl_tp(btc_current_price,side)
                 #print(new_take,take)
+                #write_to_log("SL = {} NSL = {} coin {}".format(stop,new_stop,i['Parent']['symbol']),'check_filled')
                 if new_stop < stop:
         
             
                     try:
-                        i['SL'], i['TP'] = update_sltp(i['Parent'],i['SL'], i['TP'],trail_stop_perc)
+                        i['SL'], i['TP'] = update_sltp(i['Parent'],i['SL'], i['TP'],trail_percs)
                         
                         #print("Sucessfully updated SL/TP for {}".format(i['Parent']['symbol']))
                         #print("ROE from SL {}".format(roe_quick(start_price,float(i['SL']['stopPrice']),qty,side)))
-                        #write_to_log("Sucessfully updated SL/TP for {}".format(i['Parent']['symbol']),'clear_trades')
+                        write_to_log("Sucessfully updated SL/TP for {}".format(i['Parent']['symbol']),'clear_trades')
                         i['SL'] = order_info(i['SL'])
                         i['TP'] = order_info(i['TP'])
                     except Exception as e:
                         print("Error in update_sltp() ", (e))
                         write_to_log("Error in update_sltp() {}".format(e),'clear_trades()')
                         for q in i:
-                            print(q)
+                            write_to_log("{}".format(q),'clear_trades() loop')
                         # print("""SELL
                                 # start_price: {}
                                 # Current price: {}
@@ -543,13 +541,15 @@ def trade(cur,action,price):
             client_info = client.futures_position_information()
             for p in client_info:
                 if p['symbol'] == cur:
-                   amnt = p['positionAmt']
+                   amnt = float(p['positionAmt'])
                    if amnt < 0:
                     amnt = amnt * -1
             if x['Parent']['side'] == 'BUY':
                 can = 'SELL'
             if x['Parent']['side'] == 'SELL':
                 can = 'BUY'
+            if can == action:
+                return
             client.futures_create_order(
                 symbol=cur,
     
@@ -560,21 +560,26 @@ def trade(cur,action,price):
                 quantity=amnt,
                 reduceOnly=True
             )
+            trade_list.remove(x)
             open = client.futures_get_open_orders(symbol=cur)
             for i in open:
                 #print("Cancel Order: {} ID: {}".format(cur,i['orderId']))
                 client.futures_cancel_order(symbol=cur,orderId=i['orderId'])
             write_to_log("Sucessfully changed {} trade from {} to {}".format(cur,x['Parent']['side'],can),'trade()')
-            start_price = x['Parent']['avgPrice']
-            current_price = price
-            quantity = x['Parent']['executedQty']
-            old_side = x['Parent']['side'] 
-            profit = get_profit(start_price,current_price,quantity, side )
-            total_profit += profit
-            roe = roe_quick(start_price,i['TP']['stopPrice'], quantity,side)
-            total_roe += roe
-                 
-            trade_list.remove(x)
+            try:
+                start_price = x['Parent']['avgPrice']
+                current_price = price
+                quantity = x['Parent']['executedQty']
+                old_side = x['Parent']['side'] 
+                
+                total_profit += get_profit(start_price,current_price,quantity, side )
+                roe = roe_quick(start_price,i['TP']['stopPrice'], quantity,side)
+                total_roe += roe
+            except Exception as oops:
+                print("Failed to make order: ", oops)
+                write_to_log("Issue in change order: {}".format(oops),'trade()')          
+            
+            #write_to_log("We got this far???",'trade()')
     
     min = get_min_trade(cur,price,allowed_trades)
     #print("{} / {} = {}".format(price,balance, ( balance*20 / price)))
@@ -591,23 +596,25 @@ def trade(cur,action,price):
         take_profit = price - (price * perct)
         stop_side = "BUY"
         take_side = "BUY"
-    write_to_log("Order, Sym={}, price={}, side={}, qty={}".format(cur,price,action,min),'trade()')
-    res = client.futures_create_order(
-    symbol=cur,
     
-    type='MARKET',
-    
-    
-    side=action,
-    quantity=min
-    )
-    par, stop,take = make_stoptake(res)
     try:
-        res = order_info(res)
+        res = client.futures_create_order(
+        symbol=cur,
+        
+        type='MARKET',
+        
+        
+        side=action,
+        quantity=min
+        )
+        write_to_log("Order, Sym={}, price={}, side={}, qty={}".format(cur,price,action,min),'trade()')
+        #write_to_log("{}".format(res),'trade()')
     except Exception as oops:
         print("Failed to make order: ", oops)
-        write_to_log("Failed to make order: {}".format(oops),'trade()')
-        res = par
+        write_to_log("Failed to make order: {}".format(oops),'trade()') 
+        return False
+    par, stop,take = make_stoptake(res)
+    
         
     telegram_msg("""
     
@@ -618,11 +625,11 @@ Price:  {}
 QTY:    {}
 SL:     {}
 TP:     {}
-    """.format(res['orderId'],cur,res['side'],price,res['executedQty'],stop['stopPrice'],take['stopPrice']))
+    """.format(par['orderId'],cur,par['side'],price,par['executedQty'],stop['stopPrice'],take['stopPrice']))
     
     
     try:
-        order_info(res)
+        
         trade_dict = { 'Parent' : par, 'SL' : stop, 'TP' : take } 
         trade_list.append(trade_dict)
         #log_details.append("Trying to create order for {} @ {} SIDE={} qty={}".format(cur,price,action))
@@ -766,9 +773,16 @@ def update_sltp(order,sl,tp,stop_perc):
     price = float(price['price'])
     #print(price)
     open = client.futures_get_open_orders(symbol=cur)
-    for p in open:
+    for end_job in open:
+        try:
+            if end_job['type'] == 'STOP_MARKET':
+                client.futures_cancel_order(symbol=cur,orderId=end_job['orderId'])
+        except Exception as exc:
+                print('generated an exception: %s' % ( exc))
+                write_to_log("generated an exception: {}".format(exc),'update_sltp()')
+    # for p in open:
                 #print("Cancel Order: {} ID: {}".format(cur,p['orderId']))
-                client.futures_cancel_order(symbol=cur,orderId=p['orderId'])
+                # client.futures_cancel_order(symbol=cur,orderId=p['orderId'])
     try:
         
         stop_one = client.futures_create_order(
@@ -801,37 +815,37 @@ def update_sltp(order,sl,tp,stop_perc):
 # """.format(price,cur,stop_loss,stop_loss,stop_side,min
         # ))
         return False
-    try:
+    # try:
         
-        stop_two = client.futures_create_order(
-        symbol=cur,
+        # stop_two = client.futures_create_order(
+        # symbol=cur,
         
-        type='TAKE_PROFIT_MARKET',
-        stopPrice=take_profit,
+        # type='TAKE_PROFIT_MARKET',
+        # stopPrice=take_profit,
         
-        side=stop_side,
-        quantity=min,
-        reduceOnly=True
-        )
+        # side=stop_side,
+        # quantity=min,
+        # reduceOnly=True
+        # )
         
-    except Exception as e:
-        print("Error in update_sltp() ", (e))
-        # print("""
+    # except Exception as e:
+        # print("Error in update_sltp() ", (e))
+        # # print("""
         
-# current_price: {},
-# symbol={},
-# timeInForce='GTC',
-# price={},
-# type='TAKE_PROFIT',
-# stopPrice={},
+# # current_price: {},
+# # symbol={},
+# # timeInForce='GTC',
+# # price={},
+# # type='TAKE_PROFIT',
+# # stopPrice={},
 
-# side={},
-# quantity={}
-# """.format(price,cur,take_profit,take_profit,stop_side,min
-        # ))
-        return False
+# # side={},
+# # quantity={}
+# # """.format(price,cur,take_profit,take_profit,stop_side,min
+        # # ))
+        # return False
     
-    return stop_one,stop_two
+    return stop_one,tp
             
             
       
@@ -863,10 +877,10 @@ trail_enabled: {}
 take_profit: {} 
 Lev: {} 
 Total Open Trades: {} 
-""".format(round(roe_sl,2),
-                        round(roe_trail,2),
+""".format(round(sl,2),
+                        round(trail_stop,2),
                         roe_check,
-                        round(roe_tp,2),
+                        round(tp,2),
                         lev,
                         allowed_trades)
     telegram_msg(my_str)
@@ -929,7 +943,7 @@ def check_trade_conditions(order,side):
         if coin_price <= order_price:
             print("Generating new SL/TP for found order {}".format(order['symbol']))
             if coin_price < stop_test:
-                write_to_log("Trade  {} beyond SL test, trying to exit trade ".format(order['symbol'],'chk_trade_con()'))
+                write_to_log("Trade  {} beyond SL test, trying to exit trade ".format(order['symbol']),'chk_trade_con()')
                 close_trade(cur,qty,side)
                 return
             par,stop,take = make_stoptake(order)
@@ -938,7 +952,7 @@ def check_trade_conditions(order,side):
     print("{} Trade in profit, generating new SL/TP based on Current price".format(order['symbol']))
     tmp_order = order
     tmp_order['avgPrice'] = coin_price
-    par,stop,take = make_stoptake(tmp_order)
+    par,stop,take = make_stoptake(order)
     tmp_order['avgPrice'] = order_price
     
     return stop,take
@@ -988,7 +1002,9 @@ def check_open():
             if float(i['positionAmt']) < 0:
                 pos_side = 'SELL'
             #print(i)
-            result += find_trades(i['symbol'],pos_side,i['positionAmt'])
+            final = find_trades(i['symbol'],pos_side,i['positionAmt'])
+            if final != None:
+                result += final
     return result
             
 
@@ -1026,10 +1042,13 @@ def find_trades(cur,side,qty):
             for i in open:
                 #print("Cancel Order: {} ID: {}".format(cur,i['orderId']))
                 client.futures_cancel_order(symbol=cur,orderId=i['orderId'])
-            stop,take = check_trade_conditions(par,side)
+            try:
+                stop,take = check_trade_conditions(par,side)
+            except Exception as e:
+                print("Error in find_trades() ", (e))
         #print(order_info(stop))
     try:
-        print(par)
+        #print(par)
         trade_dict = { 'Parent' : par, 'SL' : stop, 'TP' : take } 
         trade_list.append(trade_dict)
         return 1
@@ -1054,19 +1073,102 @@ def check_trade_list():
         return True
     return False
 
+def get_mark_price(pos_list,coin):
+    for i in pos_list:
+        if i['symbol'] == coin:
+            return round(float(i['markPrice']),4)
+            
+def update_trade_list():
+    global trade_list
+    for i in trade_list:
+        
+        try:
+            i['SL'] = order_info(i['SL'])
+            
+        except:
+            pass
+        try:
+            
+            i['TP'] = order_info(i['TP'])
+        except:
+            pass
+        
+         
+def check_open2(client,client_info):
+
+    result = []
+    for i in client_info:
+        par = False
+        sl = False
+        tp = False
+        if float(i['positionAmt']) != 0:
+            #print(i)
+            #print("Found open trade: {}".format(i['symbol']))
+            par = find_parent(client,i['symbol'],float(i['positionAmt']),float(i['entryPrice']))
+            open = client.futures_get_open_orders(symbol=i['symbol'])
+            for p in open:
+                #print("Cancel Order: {} ID: {}".format(i['symbol'],p['orderId']))
+                #print(p)
+                if p['type'] == 'STOP_MARKET':
+                    #print("Found SL {}".format(i['symbol']))
+                    sl = p
+                if p['type'] == 'TAKE_PROFIT_MARKET':
+                    tp = p
+                    #print("Found TP {}".format(i['symbol']))
+                #client.futures_cancel_order(symbol=i['symbol'],orderId=p['orderId'])
+        if par and sl and tp:
+            trade_dict = { 'Parent' : par, 'SL' : sl, 'TP' : tp } 
+            result.append(trade_dict)
+            print("Succesfully added trade {}".format(i['symbol']))
+    return result
+def find_parent(client,cur,qty,price):
+    orders = client.futures_get_all_orders(symbol=cur)
+    side = 'BUY'
+    price = round(price,4)
+    #print(cur,qty,price)
+    if qty < 0:
+        qty = qty * -1
+        side = 'SELL'
+    #print(qty)
+    for x in orders:
+        if x['status'] == 'FILLED':
+            
+            if float(x['executedQty']) == qty:
+                #print("found qty")
+                #print(cur,qty,price)
+                #print(x)
+                if x['side'] == side:
+                    #print(float(x['avgPrice']))
+                    check_price = round(float(x['avgPrice']),4)
+                    if check_price == price:
+                        #print(x)
+                        return x
+    print(cur,qty,price,check_price)
+    return False
+
+    
 print("Starting client....")
 write_to_log("Starting client","init()")
+
+
+# curses.start_color()
+# grn = curses.init_pair(1, curses.COLOR_GREEN, -1)
+# red = curses.init_pair(2, curses.COLOR_RED, -1)
+mail = threading.Thread(target=readmail)
+
 oldtime = time.time()
 checktime = time.time()
 gen_test_settings(1,1)
 open_trades = check_open() 
+client_info = client.futures_position_information()
+#trade_list = check_open2(client,client_info)
+open_trades = len(trade_list)
 telegram_msg("Checking for open trades...")
 telegram_msg("Open trades found: {}".format(open_trades))
 write_to_log("Checking open trades",'init()')
 
-screen = curses.initscr()
 
-mail = threading.Thread(target=readmail)
+
 
 mail.start()
 write_to_log("Starting mail thread!...","readmail()")
@@ -1079,10 +1181,13 @@ write_to_log("Starting clear_trades thread!...","clear_trades()")
 
 filled = threading.Thread(target=check_filled, args=(trade_list,))
 filled.start()
+
+updater = threading.Thread(target=update_trade_list)
+updater.start()
 write_to_log("Starting check_filled thread!...","check_filled()")
 
 print("Going to main loop!")
- 
+screen = curses.initscr() 
 error_list = False
 #print(trade_list)
 ch = ''
@@ -1117,8 +1222,8 @@ while ch != ord('q'):
             cur = i['Parent']['symbol']
             cur_str = cur.replace('USDT','')
             
-            cur_price = client.futures_symbol_ticker(symbol=cur)
-            cur_price=float(cur_price['price'])
+            cur_price = get_mark_price(client_info,cur)
+            #cur_price=float(cur_price['price'])
             start_price = float(i['Parent']['avgPrice'])
             side = i['Parent']['side']
             qty = float(i['Parent']['executedQty'])
@@ -1159,7 +1264,11 @@ while ch != ord('q'):
             sl_roe_str = str(round(sl_roe,1))
             number = str(x-5)
             number = number.ljust(8)
-            screen.addstr(x,0,  "{}{}{}{}{}{}{}{}{}{}".format(
+            if pnl < 0:
+                screen.addstr(x,0,  "{}{}{}{}{}{}{}{}{}{}".format(
+                number,cur_str,roe_str,pnl_str,price_str,qty_str,side,sl_str,tp_str,sl_roe_str))
+            else:
+                screen.addstr(x,0,  "{}{}{}{}{}{}{}{}{}{}".format(
                 number,cur_str,roe_str,pnl_str,price_str,qty_str,side,sl_str,tp_str,sl_roe_str))
             
                                                     
@@ -1216,7 +1325,7 @@ while ch != ord('q'):
                 
                 clear = threading.Thread(target=clear_trades, args=(trade_list,))
                 clear.start()
-                clear.join()
+                #clear.join()
         except Exception as e:
             print("Error ", (e))   
             
@@ -1230,9 +1339,19 @@ while ch != ord('q'):
             
                 filled = threading.Thread(target=check_filled, args=(trade_list,))
                 filled.start()
-                filled.join()
+                #filled.join()
         except Exception as e:
             print("Error ", (e))   
+        try:
+            if updater.is_alive():
+                pass #print("skipping thread!")
+            else:
+                
+                updater = threading.Thread(target=update_trade_list)
+                updater.start()
+                #updater.join()
+        except Exception as e:
+            print("Error ", (e))  
             
             
             last_error = error_list 
@@ -1254,5 +1373,10 @@ while ch != ord('q'):
             write_to_log("generated an exception: {}".format(exc),'mainloop')
             #telegram_msg('generated an exception: %s' % ( exc))
 telegram_msg("Session terminated by user...")
+for x in trade_list:
+    
+        for p in x:
+        
+            write_to_log("{}".format(x[p]),"STATS DUMP")
 curses.endwin()            
     
